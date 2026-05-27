@@ -1,56 +1,72 @@
----
 - name: 透過遠端 SSH 直接安裝 Node.js 與 AI 工具
   hosts: all
-  gather_facts: no
+  gather_facts: yes  # 啟用此項可直接獲取主機資訊，不需用 echo 抓取
+  become: yes        # 告訴 Ansible 執行需要 sudo 權限的任務
 
   vars:
     node_version: "20"
-    ansible_python_interpreter: /usr/bin/python3
+    # 移除寫死的密碼與 python 路徑變數，交給 Semaphore 管理
 
   tasks:
     - name: 顯示主機資訊
-      ansible.builtin.raw: |
-        echo '主機名稱: ' $(hostname)
-        echo '主要 IP: ' $(hostname -I | awk '{print $1}')
-      register: host_info
+      ansible.builtin.debug:
+        msg: 
+          - "主機名稱: {{ ansible_hostname }}"
+          - "主要 IP: {{ ansible_default_ipv4.address | default(ansible_all_ipv4_addresses[0]) }}"
 
     - name: 更新套件庫並安裝必要套件
-      ansible.builtin.raw: |
-        echo 'p@ssw0rd2004' | sudo -S apt-get update
-        echo 'p@ssw0rd2004' | sudo -S apt-get install -y curl ca-certificates gnupg
-      register: apt_install
+      ansible.builtin.apt:
+        name:
+          - curl
+          - ca-certificates
+          - gnupg
+        update_cache: yes
+        state: present
 
-    - name: 下載並安裝 Node.js repository
-      ansible.builtin.raw: |
-        curl -fsSL https://deb.nodesource.com/setup_{{ node_version }}.x -o /tmp/nodesource_setup.sh
-        echo 'p@ssw0rd2004' | sudo -S bash /tmp/nodesource_setup.sh
-      register: nodejs_repo
+    - name: 下載 Node.js 安裝腳本
+      ansible.builtin.get_url:
+        url: "https://deb.nodesource.com/setup_{{ node_version }}.x"
+        dest: /tmp/nodesource_setup.sh
+        mode: '0755'
+
+    - name: 執行 Node.js 來源設定
+      ansible.builtin.command: bash /tmp/nodesource_setup.sh
 
     - name: 安裝 Node.js
-      ansible.builtin.raw: |
-        echo 'p@ssw0rd2004' | sudo -S apt-get update
-        echo 'p@ssw0rd2004' | sudo -S apt-get install -y nodejs
-      register: nodejs_install
+      ansible.builtin.apt:
+        name: nodejs
+        update_cache: yes
+        state: present
 
-    - name: 全域安裝 npm 套件
-      ansible.builtin.raw: |
-        echo 'p@ssw0rd2004' | sudo -S npm install -g codex-cli
-        echo 'p@ssw0rd2004' | sudo -S npm install -g @anthropic-ai/claude-code
-      register: npm_install
+    - name: 安裝 Hermes Agent
+      ansible.builtin.shell: |
+        curl -fsSL https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.sh | bash
+      become: no # 如果此工具不需 root 權限，請關閉 become
+      ignore_errors: yes
+
+    - name: 安裝 Codex CLI
+      ansible.builtin.shell: |
+        curl -fsSL https://chatgpt.com/codex/install.sh | sh
+      become: no
+      ignore_errors: yes
+
+    - name: 全域安裝 Claude Code
+      community.general.npm:
+        name: "@anthropic-ai/claude-code"
+        global: yes
+        state: present
 
     - name: 驗證安裝結果
-      ansible.builtin.raw: |
-        echo 'Node 版本:' $(node -v)
-        echo 'npm 版本:' $(npm -v)
+      ansible.builtin.shell: |
+        echo 'Node 版本:' $(node -v 2>&1)
+        echo 'npm 版本:' $(npm -v 2>&1)
+        echo 'hermes:' $(which hermes || echo 'not found')
         echo 'codex-cli:' $(which codex-cli || echo 'not found')
         echo 'claude:' $(which claude || echo 'not found')
-        claude -v 2>/dev/null || echo 'Claude Code: not installed or needs config'
       register: verify_output
-
-    - name: 顯示主機資訊
-      debug:
-        var: host_info.stdout_lines
+      changed_when: false
+      ignore_errors: yes
 
     - name: 顯示驗證結果
-      debug:
+      ansible.builtin.debug:
         var: verify_output.stdout_lines
