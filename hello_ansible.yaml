@@ -6,4 +6,6 @@
   tasks:
     - name: 顯示 Hello World 訊息
       debug:
-        msg: "Hello World"
+        msg:
+          - "主機名稱: {{ ansible_hostname }}"
+          - "主要 IP: {{ ansible_default_ipv4.address | default(ansible_all_ipv4_addresses[0]) }}"
