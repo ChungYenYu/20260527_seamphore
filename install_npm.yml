@@ -8,7 +8,7 @@
 
   tasks:
     # ----------------------------------------------------
-    # 第一步：獲取主機資訊 (不使用 become，避免 raw 模組被跳過)
+    # 第一步：獲取主機資訊 (一般權限即可)
     # ----------------------------------------------------
     - name: 手動獲取主機名稱
       raw: hostname
@@ -29,19 +29,16 @@
           - "=========================================="
 
     # ----------------------------------------------------
-    # 第二步：安裝步驟 (個別使用 become: yes 來切換 root 權限)
+    # 第二步：安裝步驟 (直接在 raw 指令中使用 sudo 強制提升權限)
     # ----------------------------------------------------
     - name: 更新系統套件庫並安裝基礎工具 (curl)
-      raw: apt-get update && apt-get install -y curl ca-certificates gnupg
-      become: yes
+      raw: sudo apt-get update && sudo apt-get install -y curl ca-certificates gnupg
 
     - name: 下載並執行 NodeSource 官方安裝腳本
-      raw: "curl -fsSL https://nodesource.com_{{ node_version }}.x | bash -"
-      become: yes
+      raw: "curl -fsSL https://nodesource.com_{{ node_version }}.x | sudo bash -"
 
     - name: 安裝 Node.js 與內建的 npm
-      raw: apt-get install -y nodejs
-      become: yes
+      raw: sudo apt-get install -y nodejs
 
     # ----------------------------------------------------
     # 第三步：驗證安裝結果
