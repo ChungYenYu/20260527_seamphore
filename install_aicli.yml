@@ -1,46 +1,56 @@
 ---
 - name: 透過遠端 SSH 直接安裝 Node.js 與 AI 工具
   hosts: all
-  gather_facts: no     # 徹底關閉，防止觸發 Python 3.9+ 檢查
+  gather_facts: no
 
   vars:
-    node_version: "20"  # 可自訂 Node.js 版本
+    node_version: "20"
+    ansible_python_interpreter: /usr/bin/python3
 
   tasks:
-    # ----------------------------------------------------
-    # 第一步：直接在 Semaphore 本地端對目標主機發送純 SSH 指令
-    # ----------------------------------------------------
-    - name: 遠端一鍵設定環境並安裝所有工具
-      delegate_to: localhost
-      ansible.builtin.shell: |
-        ssh -o StrictHostKeyChecking=no {{ ansible_user | default('root') }}@{{ inventory_hostname }} "
-          echo '=== 開始獲取主機資訊 ===' && \
-          echo '主機名稱: ' \$(hostname) && \
-          echo '主要 IP: ' \$(hostname -I | awk '{print \$1}') && \
-          \
-          echo '=== 更新套件庫並安裝 Node.js ===' && \
-          sudo apt-get update && sudo apt-get install -y curl ca-certificates gnupg && \
-          curl -fsSL https://nodesource.com_{{ node_version }}.x | sudo bash - && \
-          sudo apt-get install -y nodejs && \
-          \
-          echo '=== 安裝 Hermes Agent ===' && \
-          curl -fsSL https://githubusercontent.com | sudo bash && \
-          \
-          echo '=== 全域安裝 npm 套件 ===' && \
-          sudo npm install -g codex-cli && \
-          sudo npm install -g @anthropic-ai/claude-code && \
-          \
-          echo '=== 驗證安裝結果 ===' && \
-          echo 'npm 版本:' \$(npm -v) && \
-          echo 'Hermes 路徑:' \$(which hermes) && \
-          echo 'Claude Code 版本:' \$(claude -v)
-        "
-      register: ssh_output
-      changed_when: true
+    - name: 顯示主機資訊
+      ansible.builtin.raw: |
+        echo '主機名稱: ' $(hostname)
+        echo '主要 IP: ' $(hostname -I | awk '{print $1}')
+      register: host_info
 
-    # ----------------------------------------------------
-    # 第二步：漂亮的印出遠端主機執行的所有日誌紀錄
-    # ----------------------------------------------------
-    - name: 顯示遠端安裝實時日誌
+    - name: 更新套件庫並安裝必要套件
+      ansible.builtin.raw: |
+        echo 'p@ssw0rd2004' | sudo -S apt-get update
+        echo 'p@ssw0rd2004' | sudo -S apt-get install -y curl ca-certificates gnupg
+      register: apt_install
+
+    - name: 下載並安裝 Node.js repository
+      ansible.builtin.raw: |
+        curl -fsSL https://deb.nodesource.com/setup_{{ node_version }}.x -o /tmp/nodesource_setup.sh
+        echo 'p@ssw0rd2004' | sudo -S bash /tmp/nodesource_setup.sh
+      register: nodejs_repo
+
+    - name: 安裝 Node.js
+      ansible.builtin.raw: |
+        echo 'p@ssw0rd2004' | sudo -S apt-get update
+        echo 'p@ssw0rd2004' | sudo -S apt-get install -y nodejs
+      register: nodejs_install
+
+    - name: 全域安裝 npm 套件
+      ansible.builtin.raw: |
+        echo 'p@ssw0rd2004' | sudo -S npm install -g codex-cli
+        echo 'p@ssw0rd2004' | sudo -S npm install -g @anthropic-ai/claude-code
+      register: npm_install
+
+    - name: 驗證安裝結果
+      ansible.builtin.raw: |
+        echo 'Node 版本:' $(node -v)
+        echo 'npm 版本:' $(npm -v)
+        echo 'codex-cli:' $(which codex-cli || echo 'not found')
+        echo 'claude:' $(which claude || echo 'not found')
+        claude -v 2>/dev/null || echo 'Claude Code: not installed or needs config'
+      register: verify_output
+
+    - name: 顯示主機資訊
       debug:
-        var: ssh_output.stdout_lines
+        var: host_info.stdout_lines
+
+    - name: 顯示驗證結果
+      debug:
+        var: verify_output.stdout_lines
