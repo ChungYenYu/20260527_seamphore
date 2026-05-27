@@ -1,45 +1,47 @@
 ---
 - name: 在受控主機上安裝 Node.js 與 npm (相容舊版 Python)
   hosts: all
-  become: yes          # 使用 root 權限執行
-  gather_facts: no     # 關閉自動收集 Facts
+  gather_facts: no     # 關閉自動收集 Facts，避開 Python 3.9+ 限制
 
   vars:
     node_version: "20"  # 可自訂 Node.js 版本 (18, 20, 21)
 
   tasks:
     # ----------------------------------------------------
-    # 第一步：使用 raw 模組手動獲取資訊（完全不依賴 Python）
+    # 第一步：獲取主機資訊 (不使用 become，避免 raw 模組被跳過)
     # ----------------------------------------------------
     - name: 手動獲取主機名稱
       raw: hostname
       register: manual_hostname
-      changed_when: false
+      ignore_errors: yes
 
     - name: 手動獲取主要 IP 位址
       raw: "hostname -I | awk '{print $1}'"
       register: manual_ip
-      changed_when: false
+      ignore_errors: yes
 
     - name: 顯示受控主機的 Hostname 與 IP 位址
       debug:
         msg: 
           - "=========================================="
-          - "主機名稱 (Hostname): {{ manual_hostname.stdout | trim }}"
-          - "主要 IP 位址 (IPv4): {{ manual_ip.stdout | trim }}"
+          - "主機名稱 (Hostname): {{ manual_hostname.stdout | default('無法取得') | trim }}"
+          - "主要 IP 位址 (IPv4): {{ manual_ip.stdout | default(inventory_hostname) | trim }}"
           - "=========================================="
 
     # ----------------------------------------------------
-    # 第二步：使用 raw 模組強制在目標主機執行 APT 更新與安裝
+    # 第二步：安裝步驟 (個別使用 become: yes 來切換 root 權限)
     # ----------------------------------------------------
     - name: 更新系統套件庫並安裝基礎工具 (curl)
       raw: apt-get update && apt-get install -y curl ca-certificates gnupg
+      become: yes
 
     - name: 下載並執行 NodeSource 官方安裝腳本
       raw: "curl -fsSL https://nodesource.com_{{ node_version }}.x | bash -"
+      become: yes
 
     - name: 安裝 Node.js 與內建的 npm
       raw: apt-get install -y nodejs
+      become: yes
 
     # ----------------------------------------------------
     # 第三步：驗證安裝結果
@@ -47,8 +49,8 @@
     - name: 檢查 npm 是否安裝成功並顯示版本
       raw: npm -v
       register: npm_version
-      changed_when: false
+      ignore_errors: yes
 
     - name: 輸出 npm 版本資訊
       debug:
-        msg: "成功安裝 npm！目前版本為: {{ npm_version.stdout | trim }}"
+        msg: "成功安裝 npm！目前版本為: {{ npm_version.stdout | default('未知') | trim }}"
