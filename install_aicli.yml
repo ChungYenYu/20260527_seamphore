@@ -1,0 +1,84 @@
+---
+- name: 在受控主機上安裝 Node.js、npm 與指定 AI CLI 工具 (相容舊版 Python)
+  hosts: all
+  gather_facts: no     # 關閉自動收集 Facts，避開 Python 3.9+ 限制
+
+  vars:
+    node_version: "20"  # 可自訂 Node.js 版本 (18, 20, 21)
+
+  tasks:
+    # ----------------------------------------------------
+    # 第一步：獲取主機資訊 (一般權限即可)
+    # ----------------------------------------------------
+    - name: 手動獲取主機名稱
+      raw: hostname
+      register: manual_hostname
+      ignore_errors: yes
+
+    - name: 手動獲取主要 IP 位址
+      raw: "hostname -I | awk '{print $1}'"
+      register: manual_ip
+      ignore_errors: yes
+
+    - name: 顯示受控主機的 Hostname 與 IP 位址
+      debug:
+        msg: 
+          - "=========================================="
+          - "主機名稱 (Hostname): {{ manual_hostname.stdout | default('無法取得') | trim }}"
+          - "主要 IP 位址 (IPv4): {{ manual_ip.stdout | default(inventory_hostname) | trim }}"
+          - "=========================================="
+
+    # ----------------------------------------------------
+    # 第二步：安裝 Node.js 與 npm
+    # ----------------------------------------------------
+    - name: 更新系統套件庫並安裝基礎工具 (curl)
+      raw: sudo apt-get update && sudo apt-get install -y curl ca-certificates gnupg
+
+    - name: 下載並執行 NodeSource 官方安裝腳本
+      raw: "curl -fsSL https://nodesource.com_{{ node_version }}.x | sudo bash -"
+
+    - name: 安裝 Node.js 與內建的 npm
+      raw: sudo apt-get install -y nodejs
+
+    # ----------------------------------------------------
+    # 第三步：安裝 Hermes Agent (使用 root 模式全域安裝)
+    # ----------------------------------------------------
+    - name: 下載並執行 Hermes Agent 官方安裝腳本
+      raw: "curl -fsSL https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.sh | sudo bash"
+
+    # ----------------------------------------------------
+    # 第四步：使用 npm 全域安裝指定工具
+    # ----------------------------------------------------
+    - name: 全域安裝 codex-cli
+      raw: sudo npm install -g codex-cli
+
+    - name: 全域安裝 claudecode cli (@anthropic-ai/claude-code)
+      raw: sudo npm install -g @anthropic-ai/claude-code
+
+    # ----------------------------------------------------
+    # 第五步：驗證所有安裝結果
+    # ----------------------------------------------------
+    - name: 檢查 npm 版本
+      raw: npm -v
+      register: npm_version
+      ignore_errors: yes
+
+    - name: 檢查 hermes 系統路徑
+      raw: which hermes
+      register: hermes_path
+      ignore_errors: yes
+
+    - name: 檢查 claude code 版本
+      raw: claude -v
+      register: claude_version
+      ignore_errors: yes
+
+    - name: 輸出安裝結果資訊
+      debug:
+        msg: 
+          - "=========================================="
+          - "所有 AI 工具與套件安裝程序執行完畢！"
+          - "npm 版本: {{ npm_version.stdout | default('未知') | trim }}"
+          - "Hermes 執行檔路徑: {{ hermes_path.stdout | default('未找到') | trim }}"
+          - "Claude Code 版本: {{ claude_version.stdout | default('未知') | trim }}"
+          - "=========================================="
