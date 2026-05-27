@@ -1,0 +1,12 @@
+---
+- name: 快速安裝 npm (Ubuntu)
+  hosts: all
+  become: yes
+  tasks:
+    - name: 安裝 nodejs 與 npm
+      apt:
+        name:
+          - nodejs
+          - npm
+        state: present
+        update_cache: yes
