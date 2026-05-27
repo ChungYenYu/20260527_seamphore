@@ -1,7 +1,10 @@
----
 - name: 在受控主機上安裝 Node.js 與 npm (最簡化版)
   hosts: all
   gather_facts: no     # 保持關閉，不依賴目標主機的 Python Facts
+  
+  # 修正點 1：全域啟用 become，讓所有任務自動切換為 root 權限
+  become: yes          
+  become_method: sudo
 
   tasks:
     # ----------------------------------------------------
@@ -17,13 +20,13 @@
         msg: "當前主機 (名稱, IP): {{ host_info.stdout | trim }}"
 
     # ----------------------------------------------------
-    # 第二步：最簡化安裝 (新增並拆分 apt update -y)
+    # 第二步：最簡化安裝 (移除指令中的 sudo)
     # ----------------------------------------------------
     - name: 更新系統套件清單
-      raw: sudo apt update -y
+      raw: apt update -y
 
     - name: 直接安裝 npm (會自動連同 nodejs 一起安裝)
-      raw: sudo apt install -y npm
+      raw: apt install -y npm
 
     # ----------------------------------------------------
     # 第三步：驗證安裝結果
