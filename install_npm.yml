@@ -1,22 +1,23 @@
 ---
-- name: 在受控主機上安裝 Node.js 與 npm
+- name: 在受控主機上安裝 Node.js 與 npm (相容舊版 Python)
   hosts: all
   become: yes          # 使用 root 權限執行
-  gather_facts: no     # 關鍵：關閉自動收集 Facts，避免因為 Python 3.8 報錯
+  gather_facts: no     # 關閉自動收集 Facts
+
   vars:
-    node_version: "20"  # 可自訂版本，例如 18, 20, 21
+    node_version: "20"  # 可自訂 Node.js 版本 (18, 20, 21)
 
   tasks:
     # ----------------------------------------------------
-    # 第一步：手動收集並顯示主機名稱與 IP 位址
+    # 第一步：使用 raw 模組手動獲取資訊（完全不依賴 Python）
     # ----------------------------------------------------
     - name: 手動獲取主機名稱
-      shell: hostname
+      raw: hostname
       register: manual_hostname
       changed_when: false
 
     - name: 手動獲取主要 IP 位址
-      shell: "hostname -I | awk '{print $1}'"
+      raw: "hostname -I | awk '{print $1}'"
       register: manual_ip
       changed_when: false
 
@@ -24,31 +25,30 @@
       debug:
         msg: 
           - "=========================================="
-          - "主機名稱 (Hostname): {{ manual_hostname.stdout }}"
-          - "主要 IP 位址 (IPv4): {{ manual_ip.stdout }}"
+          - "主機名稱 (Hostname): {{ manual_hostname.stdout | trim }}"
+          - "主要 IP 位址 (IPv4): {{ manual_ip.stdout | trim }}"
           - "=========================================="
 
     # ----------------------------------------------------
-    # Debian / Ubuntu 體系安裝邏輯 (使用 raw 或 shell 避開 python 限制)
+    # 第二步：使用 raw 模組強制在目標主機執行 APT 更新與安裝
     # ----------------------------------------------------
-    - name: 確保 Ubuntu/Debian 的基礎套件已安裝
-      shell: apt-get update && apt-get install -y curl ca-certificates gnupg
-      when: "'Ubuntu' in manual_hostname.stdout or manual_hostname.stdout != ''" # 替代 os_family 判斷
+    - name: 更新系統套件庫並安裝基礎工具 (curl)
+      raw: apt-get update && apt-get install -y curl ca-certificates gnupg
 
-    - name: 下載並執行 NodeSource 安裝腳本 (Debian/Ubuntu)
-      shell: "curl -fsSL https://nodesource.com_{{ node_version }}.x | bash -"
+    - name: 下載並執行 NodeSource 官方安裝腳本
+      raw: "curl -fsSL https://nodesource.com_{{ node_version }}.x | bash -"
 
-    - name: 使用 apt 安裝 nodejs (內含 npm)
-      shell: apt-get install -y nodejs
+    - name: 安裝 Node.js 與內建的 npm
+      raw: apt-get install -y nodejs
 
     # ----------------------------------------------------
-    # 驗證安裝結果
+    # 第三步：驗證安裝結果
     # ----------------------------------------------------
     - name: 檢查 npm 是否安裝成功並顯示版本
-      command: npm -v
+      raw: npm -v
       register: npm_version
       changed_when: false
 
     - name: 輸出 npm 版本資訊
       debug:
-        msg: "成功安裝 npm！目前版本為: {{ npm_version.stdout }}"
+        msg: "成功安裝 npm！目前版本為: {{ npm_version.stdout | trim }}"
