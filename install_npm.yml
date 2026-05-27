@@ -1,12 +1,75 @@
 ---
-- name: 快速安裝 npm (Ubuntu)
+- name: 在受控主機上安裝 Node.js 與 npm
   hosts: all
-  become: yes
+  become: yes  # 使用 root 權限執行
+  vars:
+    node_version: "20"  # 可自訂版本，例如 18, 20, 21
+
   tasks:
-    - name: 安裝 nodejs 與 npm
+    # ----------------------------------------------------
+    # 第一步：顯示主機名稱與 IP 位址
+    # ----------------------------------------------------
+    - name: 顯示受控主機的 Hostname 與 IP 位址
+      debug:
+        msg: 
+          - "=========================================="
+          - "主機名稱 (Hostname): {{ ansible_hostname }}"
+          - "主要 IP 位址 (IPv4): {{ ansible_default_ipv4.address | default('未偵測到主要IP') }}"
+          - "=========================================="
+
+    # ----------------------------------------------------
+    # Debian / Ubuntu 體系安裝邏輯
+    # ----------------------------------------------------
+    - name: 確保 Ubuntu/Debian 的基礎套件已安裝
       apt:
         name:
-          - nodejs
-          - npm
+          - curl
+          - ca-certificates
+          - gnupg
         state: present
         update_cache: yes
+      when: ansible_os_family == "Debian"
+
+    - name: 下載並執行 NodeSource 安裝腳本 (Debian/Ubuntu)
+      shell: "curl -fsSL https://nodesource.com_{{ node_version }}.x | bash -"
+      when: ansible_os_family == "Debian"
+      args:
+        creates: /etc/apt/sources.list.d/nodesource.list
+
+    - name: 使用 apt 安裝 nodejs (內含 npm)
+      apt:
+        name: nodejs
+        state: present
+        update_cache: yes
+      when: ansible_os_family == "Debian"
+
+    # ----------------------------------------------------
+    # RedHat / CentOS / Rocky Linux 體系安裝邏輯
+    # ----------------------------------------------------
+    - name: 確保 RHEL/CentOS 的 curl 已安裝
+      dnf:
+        name: curl
+        state: present
+      when: ansible_os_family == "RedHat"
+
+    - name: 下載並執行 NodeSource 安裝腳本 (RHEL/CentOS)
+      shell: "curl -fsSL https://nodesource.com_{{ node_version }}.x | bash -"
+      when: ansible_os_family == "RedHat"
+
+    - name: 使用 dnf 安裝 nodejs (內含 npm)
+      dnf:
+        name: nodejs
+        state: present
+      when: ansible_os_family == "RedHat"
+
+    # ----------------------------------------------------
+    # 驗證安裝結果
+    # ----------------------------------------------------
+    - name: 檢查 npm 是否安裝成功並顯示版本
+      command: npm -v
+      register: npm_version
+      changed_when: false
+
+    - name: 輸出 npm 版本資訊
+      debug:
+        msg: "成功安裝 npm！目前版本為: {{ npm_version.stdout }}"
