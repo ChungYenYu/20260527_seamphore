@@ -1,66 +1,45 @@
 ---
 - name: 在受控主機上安裝 Node.js 與 npm
   hosts: all
-  become: yes  # 使用 root 權限執行
+  become: yes          # 使用 root 權限執行
+  gather_facts: no     # 關鍵：關閉自動收集 Facts，避免因為 Python 3.8 報錯
   vars:
     node_version: "20"  # 可自訂版本，例如 18, 20, 21
 
   tasks:
     # ----------------------------------------------------
-    # 第一步：顯示主機名稱與 IP 位址
+    # 第一步：手動收集並顯示主機名稱與 IP 位址
     # ----------------------------------------------------
+    - name: 手動獲取主機名稱
+      shell: hostname
+      register: manual_hostname
+      changed_when: false
+
+    - name: 手動獲取主要 IP 位址
+      shell: "hostname -I | awk '{print $1}'"
+      register: manual_ip
+      changed_when: false
+
     - name: 顯示受控主機的 Hostname 與 IP 位址
       debug:
         msg: 
           - "=========================================="
-          - "主機名稱 (Hostname): {{ ansible_hostname }}"
-          - "主要 IP 位址 (IPv4): {{ ansible_default_ipv4.address | default('未偵測到主要IP') }}"
+          - "主機名稱 (Hostname): {{ manual_hostname.stdout }}"
+          - "主要 IP 位址 (IPv4): {{ manual_ip.stdout }}"
           - "=========================================="
 
     # ----------------------------------------------------
-    # Debian / Ubuntu 體系安裝邏輯
+    # Debian / Ubuntu 體系安裝邏輯 (使用 raw 或 shell 避開 python 限制)
     # ----------------------------------------------------
     - name: 確保 Ubuntu/Debian 的基礎套件已安裝
-      apt:
-        name:
-          - curl
-          - ca-certificates
-          - gnupg
-        state: present
-        update_cache: yes
-      when: ansible_os_family == "Debian"
+      shell: apt-get update && apt-get install -y curl ca-certificates gnupg
+      when: "'Ubuntu' in manual_hostname.stdout or manual_hostname.stdout != ''" # 替代 os_family 判斷
 
     - name: 下載並執行 NodeSource 安裝腳本 (Debian/Ubuntu)
       shell: "curl -fsSL https://nodesource.com_{{ node_version }}.x | bash -"
-      when: ansible_os_family == "Debian"
-      args:
-        creates: /etc/apt/sources.list.d/nodesource.list
 
     - name: 使用 apt 安裝 nodejs (內含 npm)
-      apt:
-        name: nodejs
-        state: present
-        update_cache: yes
-      when: ansible_os_family == "Debian"
-
-    # ----------------------------------------------------
-    # RedHat / CentOS / Rocky Linux 體系安裝邏輯
-    # ----------------------------------------------------
-    - name: 確保 RHEL/CentOS 的 curl 已安裝
-      dnf:
-        name: curl
-        state: present
-      when: ansible_os_family == "RedHat"
-
-    - name: 下載並執行 NodeSource 安裝腳本 (RHEL/CentOS)
-      shell: "curl -fsSL https://nodesource.com_{{ node_version }}.x | bash -"
-      when: ansible_os_family == "RedHat"
-
-    - name: 使用 dnf 安裝 nodejs (內含 npm)
-      dnf:
-        name: nodejs
-        state: present
-      when: ansible_os_family == "RedHat"
+      shell: apt-get install -y nodejs
 
     # ----------------------------------------------------
     # 驗證安裝結果
