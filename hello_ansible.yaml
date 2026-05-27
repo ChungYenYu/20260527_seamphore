@@ -1,0 +1,9 @@
+---
+- name: 執行 Hello World 測試
+  hosts: all
+  gather_facts: no
+
+  tasks:
+    - name: 顯示 Hello World 訊息
+      debug:
+        msg: "Hello World"
