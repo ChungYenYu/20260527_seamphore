@@ -1,0 +1,55 @@
+- name: 安裝 Hermes Agent (per-user, --skip-setup)
+  hosts: all
+  gather_facts: no
+
+  vars:
+    target_user: "cary_yu"
+
+  tasks:
+    - name: 主機資訊
+      raw: echo "$(hostname) / $(hostname -I | awk '{print $1}')"
+      register: hostinfo
+      changed_when: false
+
+    - debug: msg="{{ hostinfo.stdout | trim }}"
+
+    - name: 預檢 — 已安裝的 hermes 版本
+      raw: |
+        echo "{{ ansible_ssh_pass }}" | sudo -S -u {{ target_user }} -H bash -lc '
+          export PATH=$HOME/.local/bin:$HOME/.hermes/bin:$PATH
+          if command -v hermes >/dev/null 2>&1; then
+            echo "BEFORE: $(hermes --version 2>&1 | head -1)"
+          else
+            echo "BEFORE: not installed"
+          fi
+        '
+      changed_when: false
+
+    - name: "[install] curl install.sh | bash -s -- --skip-setup --no-venv (240s timeout)"
+      raw: |
+        echo "=== START hermes $(date +%T) ==="
+        echo "{{ ansible_ssh_pass }}" | sudo -S -u {{ target_user }} -H bash -lc '
+          export PATH=$HOME/.local/bin:$PATH
+          timeout 240 bash -c "curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash -s -- --skip-setup" </dev/null 2>&1 | tail -25
+        '
+        echo "=== END   hermes $(date +%T) rc=$? ==="
+      register: install_out
+      ignore_errors: yes
+
+    - debug: var=install_out.stdout_lines
+
+    - name: 驗證 hermes 版本
+      raw: |
+        echo "{{ ansible_ssh_pass }}" | sudo -S -u {{ target_user }} -H bash -lc '
+          export PATH=$HOME/.local/bin:$HOME/.hermes/bin:$PATH
+          if command -v hermes >/dev/null 2>&1; then
+            printf "AFTER: %s\n" "$(hermes --version 2>&1 | head -1)"
+          else
+            printf "AFTER: MISSING — check install_out above\n"
+            exit 1
+          fi
+        '
+      register: verify
+      changed_when: false
+
+    - debug: msg="{{ verify.stdout | trim }}"
