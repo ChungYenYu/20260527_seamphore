@@ -13,6 +13,9 @@
 
     - debug: msg="{{ hostinfo.stdout | trim }}"
 
+    - name: 預裝 ripgrep + ffmpeg (避免 install.sh 卡 sudo prompt)
+      raw: echo "{{ ansible_ssh_pass }}" | sudo -S DEBIAN_FRONTEND=noninteractive apt-get install -y ripgrep ffmpeg 2>&1 | tail -3
+
     - name: 預檢 — 已安裝的 hermes 版本
       raw: |
         echo "{{ ansible_ssh_pass }}" | sudo -S -u {{ target_user }} -H bash -lc '
