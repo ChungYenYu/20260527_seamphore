@@ -1,4 +1,4 @@
-- name: 安裝五大 AI CLI (hermes / codex / claude-code / opencode / gemini)
+- name: 安裝四大 AI CLI (codex / claude-code / opencode / gemini)
   hosts: all
   gather_facts: no
 
@@ -63,14 +63,9 @@
       loop_control:
         label: "{{ item.item }}"
 
-    - name: 安裝 Hermes Agent (per-user)
-      raw: |
-        echo "{{ ansible_ssh_pass }}" | sudo -S -u {{ target_user }} -H bash -lc '
-          timeout 180 bash -c "curl -fsSL https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.sh | bash" </dev/null 2>&1 | tail -20
-          echo "exit=$?"
-        '
-      register: hermes_out
-      ignore_errors: yes
+    - name: 安裝 Hermes Agent (per-user)  # 暫時停用：install.sh 在 worker 會 hang，TODO 手動安裝
+      raw: echo "[skipped] hermes install — TODO manual"
+      changed_when: false
 
     - name: 驗證各 CLI 版本
       raw: |
