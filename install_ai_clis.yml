@@ -1,4 +1,4 @@
-- name: 安裝六大 AI CLI (hermes / codex / claude-code / opencode / gemini / copilot)
+- name: 安裝五大 AI CLI (hermes / codex / claude-code / opencode / gemini)
   hosts: all
   gather_facts: no
 
@@ -10,7 +10,7 @@
       - "@anthropic-ai/claude-code"
       - "opencode-ai"
       - "@google/gemini-cli"
-      - "@github/copilot"
+      # - "@github/copilot"  # TODO: npm postinstall hangs on workers, install manually for now
 
   tasks:
     - name: 主機資訊
