@@ -1,4 +1,4 @@
-- name: 安裝四大 AI CLI (codex / claude-code / opencode / gemini)
+- name: 安裝五大 AI CLI (codex / claude-code / opencode / gemini / copilot)
   hosts: all
   gather_facts: no
 
@@ -10,7 +10,7 @@
       - "@anthropic-ai/claude-code"
       - "opencode-ai"
       - "@google/gemini-cli"
-      # - "@github/copilot"  # TODO: npm postinstall hangs on workers, install manually for now
+      - "@github/copilot"
 
   tasks:
     - name: 主機資訊
@@ -49,7 +49,7 @@
       raw: |
         echo "{{ ansible_ssh_pass }}" | sudo -S -u {{ target_user }} -H bash -lc '
           export PATH=$HOME/.npm-global/bin:$PATH
-          timeout 300 npm install -g --silent --no-fund --no-audit --ignore-scripts {{ item }} 2>&1 | tail -10
+          timeout 300 npm install -g --silent --no-fund --no-audit {{ item }} 2>&1 | tail -10
           echo "exit=$?"
         '
       loop: "{{ npm_globals }}"
