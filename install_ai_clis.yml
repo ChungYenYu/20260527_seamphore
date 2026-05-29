@@ -1,0 +1,125 @@
+- name: 安裝六大 AI CLI (hermes / codex / claude-code / opencode / gemini / copilot)
+  hosts: all
+  gather_facts: yes
+  become: yes  # 預設提權；個別 task 視需要關閉
+
+  vars:
+    node_version: "20"
+    target_user: "cary_yu"        # per-user 安裝對象 (hermes)
+    target_home: "/home/cary_yu"
+    npm_globals:
+      - "@openai/codex"
+      - "@anthropic-ai/claude-code"
+      - "opencode-ai"
+      - "@google/gemini-cli"
+      - "@github/copilot"
+
+  tasks:
+    # ----------------------------------------------------
+    # 0. 主機資訊
+    # ----------------------------------------------------
+    - name: 顯示主機資訊
+      ansible.builtin.debug:
+        msg:
+          - "主機: {{ ansible_hostname }}"
+          - "IP  : {{ ansible_default_ipv4.address | default(ansible_all_ipv4_addresses[0]) }}"
+          - "OS  : {{ ansible_distribution }} {{ ansible_distribution_version }}"
+
+    # ----------------------------------------------------
+    # 1. 系統相依套件
+    # ----------------------------------------------------
+    - name: 安裝系統相依套件 (curl / ca-certs / gnupg / build-essential)
+      ansible.builtin.apt:
+        name:
+          - curl
+          - ca-certificates
+          - gnupg
+          - git
+          - build-essential
+        update_cache: yes
+        cache_valid_time: 3600
+        state: present
+
+    # ----------------------------------------------------
+    # 2. Node.js (NodeSource 20.x) — 大多數 CLI 都用 npm
+    # ----------------------------------------------------
+    - name: 檢查目前 Node 版本
+      ansible.builtin.shell: "node -v 2>/dev/null || echo NONE"
+      register: node_check
+      changed_when: false
+
+    - name: 下載 NodeSource setup 腳本
+      ansible.builtin.get_url:
+        url: "https://deb.nodesource.com/setup_{{ node_version }}.x"
+        dest: /tmp/nodesource_setup.sh
+        mode: "0755"
+      when: "'v' + node_version not in node_check.stdout"
+
+    - name: 執行 NodeSource 設定
+      ansible.builtin.command: bash /tmp/nodesource_setup.sh
+      when: "'v' + node_version not in node_check.stdout"
+
+    - name: 安裝 Node.js
+      ansible.builtin.apt:
+        name: nodejs
+        update_cache: yes
+        state: present
+      when: "'v' + node_version not in node_check.stdout"
+
+    # ----------------------------------------------------
+    # 3. npm 全域安裝 5 個 CLI (codex / claude-code / opencode / gemini / copilot)
+    # ----------------------------------------------------
+    - name: 全域安裝 AI CLI npm 套件
+      community.general.npm:
+        name: "{{ item }}"
+        global: yes
+        state: present
+      loop: "{{ npm_globals }}"
+      register: npm_install
+      ignore_errors: yes  # 個別套件失敗不擋其他
+
+    - name: 顯示 npm 安裝結果摘要
+      ansible.builtin.debug:
+        msg: "{{ item.item }} → {{ 'OK' if not item.failed else 'FAIL: ' + (item.msg | default('')) }}"
+      loop: "{{ npm_install.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+    # ----------------------------------------------------
+    # 4. Hermes Agent (per-user, 不走 root)
+    # ----------------------------------------------------
+    - name: 安裝 Hermes Agent (as {{ target_user }})
+      ansible.builtin.shell: |
+        curl -fsSL https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.sh | bash
+      args:
+        executable: /bin/bash
+      become: yes
+      become_user: "{{ target_user }}"
+      environment:
+        HOME: "{{ target_home }}"
+        PATH: "{{ target_home }}/.local/bin:/usr/local/bin:/usr/bin:/bin"
+      register: hermes_install
+      ignore_errors: yes
+      changed_when: "'already installed' not in (hermes_install.stdout | default(''))"
+
+    # ----------------------------------------------------
+    # 5. 驗證所有 CLI
+    # ----------------------------------------------------
+    - name: 驗證各 CLI 是否存在 (root PATH + {{ target_user }} PATH)
+      ansible.builtin.shell: |
+        export PATH="$PATH:{{ target_home }}/.local/bin"
+        echo "=== node ==="    ; node -v 2>&1 || echo missing
+        echo "=== npm ==="     ; npm -v  2>&1 || echo missing
+        echo "=== codex ==="   ; (command -v codex   && codex --version   2>&1 | head -1) || echo missing
+        echo "=== claude ==="  ; (command -v claude  && claude --version  2>&1 | head -1) || echo missing
+        echo "=== opencode ===" ;(command -v opencode && opencode --version 2>&1 | head -1) || echo missing
+        echo "=== gemini ==="  ; (command -v gemini  && gemini --version  2>&1 | head -1) || echo missing
+        echo "=== copilot ===" ; (command -v copilot && copilot --version 2>&1 | head -1) || echo missing
+        echo "=== hermes ==="  ; sudo -u {{ target_user }} bash -lc 'command -v hermes && hermes --version 2>&1 | head -1' || echo missing
+      register: verify
+      changed_when: false
+      ignore_errors: yes
+
+    - name: 顯示驗證輸出
+      ansible.builtin.debug:
+        var: verify.stdout_lines
