@@ -4,7 +4,7 @@
   become: yes  # 預設提權；個別 task 視需要關閉
 
   vars:
-    ansible_become_pass: "{{ ansible_ssh_pass }}"   # cary-vm-key 是 login_password
+    ansible_become_pass: "{{ ansible_password | default(ansible_ssh_pass, true) }}"
     node_version: "20"
     target_user: "cary_yu"        # per-user 安裝對象 (hermes)
     target_home: "/home/cary_yu"
