@@ -5,12 +5,6 @@
   vars:
     node_version: "20"
     target_user: "cary_yu"
-    npm_globals:
-      - "@openai/codex"
-      - "@anthropic-ai/claude-code"
-      - "opencode-ai"
-      - "@google/gemini-cli"
-      - "@github/copilot"
 
   tasks:
     - name: 主機資訊
@@ -45,23 +39,56 @@
       register: prefix_out
       changed_when: false
 
-    - name: npm install -g {{ item }}
+    # ─── 每套 CLI 獨立 task：Semaphore 會逐 task 即時輸出 ───────────────
+    - name: "[1/5] npm install -g @openai/codex"
       raw: |
+        echo "=== START codex $(date +%T) ==="
         echo "{{ ansible_ssh_pass }}" | sudo -S -u {{ target_user }} -H bash -lc '
           export PATH=$HOME/.npm-global/bin:$PATH
-          timeout 300 npm install -g --silent --no-fund --no-audit {{ item }} 2>&1 | tail -10
-          echo "exit=$?"
+          timeout 300 npm install -g --no-fund --no-audit @openai/codex 2>&1 | tail -5
         '
-      loop: "{{ npm_globals }}"
-      register: npm_out
+        echo "=== END   codex $(date +%T) rc=$? ==="
       ignore_errors: yes
 
-    - name: 顯示 npm 安裝結果
-      debug:
-        msg: "{{ item.item }} → rc={{ item.rc }}"
-      loop: "{{ npm_out.results }}"
-      loop_control:
-        label: "{{ item.item }}"
+    - name: "[2/5] npm install -g @anthropic-ai/claude-code"
+      raw: |
+        echo "=== START claude $(date +%T) ==="
+        echo "{{ ansible_ssh_pass }}" | sudo -S -u {{ target_user }} -H bash -lc '
+          export PATH=$HOME/.npm-global/bin:$PATH
+          timeout 300 npm install -g --no-fund --no-audit @anthropic-ai/claude-code 2>&1 | tail -5
+        '
+        echo "=== END   claude $(date +%T) rc=$? ==="
+      ignore_errors: yes
+
+    - name: "[3/5] npm install -g opencode-ai"
+      raw: |
+        echo "=== START opencode $(date +%T) ==="
+        echo "{{ ansible_ssh_pass }}" | sudo -S -u {{ target_user }} -H bash -lc '
+          export PATH=$HOME/.npm-global/bin:$PATH
+          timeout 300 npm install -g --no-fund --no-audit opencode-ai 2>&1 | tail -5
+        '
+        echo "=== END   opencode $(date +%T) rc=$? ==="
+      ignore_errors: yes
+
+    - name: "[4/5] npm install -g @google/gemini-cli"
+      raw: |
+        echo "=== START gemini $(date +%T) ==="
+        echo "{{ ansible_ssh_pass }}" | sudo -S -u {{ target_user }} -H bash -lc '
+          export PATH=$HOME/.npm-global/bin:$PATH
+          timeout 300 npm install -g --no-fund --no-audit @google/gemini-cli 2>&1 | tail -5
+        '
+        echo "=== END   gemini $(date +%T) rc=$? ==="
+      ignore_errors: yes
+
+    - name: "[5/5] npm install -g @github/copilot"
+      raw: |
+        echo "=== START copilot $(date +%T) ==="
+        echo "{{ ansible_ssh_pass }}" | sudo -S -u {{ target_user }} -H bash -lc '
+          export PATH=$HOME/.npm-global/bin:$PATH
+          timeout 300 npm install -g --no-fund --no-audit @github/copilot 2>&1 | tail -5
+        '
+        echo "=== END   copilot $(date +%T) rc=$? ==="
+      ignore_errors: yes
 
     - name: 安裝 Hermes Agent (per-user)  # 暫時停用：install.sh 在 worker 會 hang，TODO 手動安裝
       raw: echo "[skipped] hermes install — TODO manual"
