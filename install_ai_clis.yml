@@ -66,7 +66,8 @@
     - name: 安裝 Hermes Agent (per-user)
       raw: |
         echo "{{ ansible_ssh_pass }}" | sudo -S -u {{ target_user }} -H bash -lc '
-          curl -fsSL https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.sh | bash 2>&1 | tail -15
+          timeout 180 bash -c "curl -fsSL https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.sh | bash" </dev/null 2>&1 | tail -20
+          echo "exit=$?"
         '
       register: hermes_out
       ignore_errors: yes
