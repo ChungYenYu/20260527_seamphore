@@ -1,0 +1,82 @@
+- name: 在受控主機上安裝 Golang (官方 tar.gz → /usr/local/go)
+  hosts: all
+  gather_facts: no
+  vars:
+    go_version: "1.24.3"
+    go_arch: "linux-amd64"
+    go_install_dir: "/usr/local"
+
+  tasks:
+    # ----------------------------------------------------
+    # 第一步：獲取主機資訊 (免 root)
+    # ----------------------------------------------------
+    - name: 手動獲取主機與 IP 資訊
+      raw: echo "$(hostname),$(hostname -I | awk '{print $1}')"
+      register: host_info
+      ignore_errors: yes
+
+    - name: 顯示受控主機資訊
+      debug:
+        msg: "當前主機 (名稱, IP): {{ host_info.stdout | trim }}"
+
+    # ----------------------------------------------------
+    # 第二步：檢查既有 Go 版本（避免重複安裝）
+    # ----------------------------------------------------
+    - name: 檢查既有 Go 版本
+      raw: /usr/local/go/bin/go version 2>/dev/null || echo "NOT_INSTALLED"
+      register: existing_go
+      ignore_errors: yes
+
+    - name: 顯示既有版本
+      debug:
+        msg: "目前 Go 狀態: {{ existing_go.stdout | trim }}"
+
+    # ----------------------------------------------------
+    # 第三步：下載官方 tar.gz
+    # ----------------------------------------------------
+    - name: 下載 go{{ go_version }}.{{ go_arch }}.tar.gz 至 /tmp
+      raw: |
+        cd /tmp && \
+        curl -fsSL -o go{{ go_version }}.tar.gz \
+          https://go.dev/dl/go{{ go_version }}.{{ go_arch }}.tar.gz && \
+        ls -lh go{{ go_version }}.tar.gz
+      when: "'go' + go_version not in (existing_go.stdout | default(''))"
+
+    # ----------------------------------------------------
+    # 第四步：移除舊版 + 解壓 (需 sudo)
+    # ----------------------------------------------------
+    - name: 移除舊有 /usr/local/go
+      raw: echo "{{ ansible_ssh_pass }}" | sudo -S rm -rf {{ go_install_dir }}/go
+      when: "'go' + go_version not in (existing_go.stdout | default(''))"
+
+    - name: 解壓 tarball 至 {{ go_install_dir }}
+      raw: echo "{{ ansible_ssh_pass }}" | sudo -S tar -C {{ go_install_dir }} -xzf /tmp/go{{ go_version }}.tar.gz
+      when: "'go' + go_version not in (existing_go.stdout | default(''))"
+
+    - name: 清理 /tmp tarball
+      raw: rm -f /tmp/go{{ go_version }}.tar.gz
+      when: "'go' + go_version not in (existing_go.stdout | default(''))"
+
+    # ----------------------------------------------------
+    # 第五步：設定 PATH (/etc/profile.d/golang.sh) - 全域生效
+    # ----------------------------------------------------
+    - name: 建立 /etc/profile.d/golang.sh (PATH + GOPATH)
+      raw: |
+        echo "{{ ansible_ssh_pass }}" | sudo -S bash -c 'cat > /etc/profile.d/golang.sh <<EOF
+        export PATH=\$PATH:/usr/local/go/bin
+        export GOPATH=\$HOME/go
+        export PATH=\$PATH:\$GOPATH/bin
+        EOF
+        chmod 644 /etc/profile.d/golang.sh'
+
+    # ----------------------------------------------------
+    # 第六步：驗證安裝結果 (免 root)
+    # ----------------------------------------------------
+    - name: 檢查 Go 版本
+      raw: /usr/local/go/bin/go version
+      register: version_check
+      ignore_errors: yes
+
+    - name: 輸出安裝結果
+      debug:
+        msg: "✅ Go 安裝完成: {{ version_check.stdout | trim }}"
